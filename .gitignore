@@ -1,0 +1,17 @@
+# Separate repo with its own remote — not tracked here
+zscraper/
+
+# Secrets (backed up via restic, never committed). .env.example files ARE tracked.
+.env
+.env.*
+!.env.example
+
+# Runtime state written by the containers (backed up via restic)
+caddy/data/
+caddy/config/
+technitium/data/
+beszel/beszel_data/
+beszel/beszel_agent_data/
+
+# OS cruft
+.DS_Store

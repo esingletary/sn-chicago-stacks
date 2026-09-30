@@ -1,0 +1,37 @@
+services:
+  technitium:
+    image: technitium/dns-server:latest
+    container_name: technitium
+    hostname: dns.chicago.sing.sh
+    restart: unless-stopped
+    # Image has no curl/wget/nc, so use bash's /dev/tcp builtin to confirm the
+    # core DNS listener (TCP 53) is accepting connections.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/53"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    ports:
+      # Core DNS — served on host port 53
+      - "53:53/udp"
+      - "53:53/tcp"
+      # Web console
+      - "5380:5380/tcp"
+      # DoT (853) / DoH (443) intentionally left off for now.
+    environment:
+      # Pin the web console port; first launch sets the admin password interactively.
+      - DNS_SERVER_WEB_SERVICE_HTTP_PORT=5380
+    volumes:
+      # All config/data kept inside the stack folder so the whole tree
+      # moves to NVMe later as a single rsync.
+      - ./data:/etc/dns
+    networks:
+      # Join the shared reverse-proxy network so the central Caddy can reach the
+      # web console as `technitium:5380` (fronted at https://dns.chicago.sing.sh).
+      # Core DNS still serves on host port 53 via the published ports above.
+      - proxy
+
+networks:
+  proxy:
+    external: true

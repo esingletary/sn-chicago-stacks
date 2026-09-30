@@ -1,0 +1,60 @@
+services:
+  # --- Beszel hub (web dashboard) -> https://monitor.chicago.sing.sh ---
+  # Joined to the shared `proxy` network so the central Caddy reaches it as
+  # `beszel:8090`. Also published on host :8090 so the host-networked agent
+  # below can dial it at http://localhost:8090 without depending on Caddy/DNS.
+  beszel:
+    image: henrygd/beszel:latest
+    container_name: beszel
+    restart: unless-stopped
+    # The beszel binary ships its own hub health check; --url points it at the
+    # local listener. Exits non-zero if the hub isn't answering on 8090.
+    healthcheck:
+      test: ["CMD", "/beszel", "health", "--url", "http://127.0.0.1:8090"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    ports:
+      - "8090:8090"
+    volumes:
+      # All hub state (SQLite DB, SSH keypair, settings) kept in-stack so the
+      # whole tree rsyncs to NVMe later as one move — same pattern as the
+      # other stacks here.
+      - ./beszel_data:/beszel_data
+    networks:
+      - proxy
+
+  # --- Beszel agent (collects this Pi's metrics: CPU, mem, temp, disk, net,
+  #     and per-container Docker stats) ---
+  # Host networking gives accurate host-level network/IO stats and lets the
+  # agent dial the hub at localhost:8090. The agent connects OUT to the hub
+  # over WebSocket using HUB_URL + TOKEN; KEY is the hub's public key.
+  # Brought up AFTER the hub, once TOKEN/KEY are filled in from the UI.
+  beszel-agent:
+    image: henrygd/beszel-agent:latest
+    container_name: beszel-agent
+    restart: unless-stopped
+    # No healthcheck: the scratch image has no shell/wget/nc, and the agent's
+    # own `health` subcommand returns "ok" unconditionally (no real probe), so
+    # any check would be misleading. Agent liveness is already visible in the
+    # hub itself — the system goes offline there if the agent stops reporting.
+    network_mode: host
+    depends_on:
+      - beszel
+    volumes:
+      - ./beszel_agent_data:/var/lib/beszel-agent
+      # Read-only Docker socket so the agent can report per-container stats.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      LISTEN: 45876
+      HUB_URL: "http://localhost:8090"
+      # Filled in from the hub UI's "Add System" dialog (see setup notes).
+      KEY: "${BESZEL_KEY}"
+      TOKEN: "${BESZEL_TOKEN}"
+
+networks:
+  # Shared reverse-proxy network (external) — same one Caddy and the other
+  # stacks use. Created once with: docker network create proxy
+  proxy:
+    external: true

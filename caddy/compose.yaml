@@ -1,0 +1,38 @@
+services:
+  caddy:
+    build: .
+    image: caddy-cloudflare:local
+    container_name: caddy
+    restart: unless-stopped
+    # Probe Caddy's local admin API (always on 127.0.0.1:2019); a 200 from
+    # /config/ means the server is up and serving its running config.
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC)
+    env_file:
+      - .env             # holds CF_API_TOKEN (gitignored; see .env.example)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv:ro                 # static test/site content
+      - ./data:/data                   # ACME account + issued certs (keep in-stack for NVMe move)
+      - ./config:/config               # Caddy autosave config
+      # zscraper gallery media, read-only. Lets Caddy serve /images/* (images +
+      # videos) straight from disk, bypassing Node. Cross-stack path — keep in
+      # sync with the zscraper data mount when it moves to NVMe.
+      - /opt/stacks/zscraper/data:/media/zscraper:ro
+    networks:
+      - proxy
+
+networks:
+  # Shared reverse-proxy network. Other stacks join this (external) network so
+  # Caddy can reach them by service name. Created once with:
+  #   docker network create proxy
+  proxy:
+    external: true

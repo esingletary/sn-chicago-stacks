@@ -1,0 +1,107 @@
+{
+	# ACME contact for expiry notices (optional). Set a real address before
+	# switching to Let's Encrypt, or leave commented to register anonymously.
+	# email admin@sing.sh
+
+	# PHASE 2 SAFETY: uncomment to use the Let's Encrypt *staging* CA while
+	# validating DNS-01 with a new token. Staging certs are untrusted but
+	# don't burn the production rate limit. Re-comment once issuance proven.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# ====================================================================
+# TLS issuance snippets — switch a site between these with one `import`.
+#
+# PHASE 1 (current, NO token needed): Caddy's internal CA. Cert is
+#   untrusted by clients (expect a warning / use `curl -k`), but it proves
+#   HTTPS termination and the proxy plumbing work end to end.
+#
+# PHASE 2 (after CF_API_TOKEN is in .env): real Let's Encrypt certs via
+#   the Cloudflare DNS-01 challenge — publicly trusted, auto-renewing,
+#   works for internal-only names. Change `import tls_internal` to
+#   `import tls_cloudflare` on each site, then apply with
+#   `docker compose up -d --force-recreate` (NOT `caddy reload` — the
+#   Caddyfile is a single-file bind mount and reload sees a stale inode).
+# ====================================================================
+(tls_internal) {
+	tls internal
+}
+
+(tls_cloudflare) {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1
+	}
+}
+
+# --- Technitium DNS web console -> https://dns.chicago.sing.sh ---
+# Console is plain HTTP on :5380 inside the container (joined to `proxy`).
+# Raw DNS (port 53) is unaffected — it stays on the host, not proxied here.
+dns.chicago.sing.sh {
+	import tls_cloudflare
+	reverse_proxy technitium:5380
+}
+
+# --- UniFi gateway (UCG-Ultra) UI -> https://gateway.chicago.sing.sh ---
+# Upstream is HTTPS with a self-signed cert, so connect over TLS but skip
+# verifying it; Caddy presents the real trusted cert to clients. For this to
+# take effect, gateway.chicago.sing.sh must resolve to Caddy (10.0.1.6) — remove
+# the explicit `gateway` A record in Technitium so the *.chicago.sing.sh
+# wildcard (-> 10.0.1.6) catches it. The gateway stays reachable at
+# https://10.0.1.1 directly as a fallback.
+gateway.chicago.sing.sh {
+	import tls_cloudflare
+	reverse_proxy https://10.0.1.1 {
+		transport http {
+			tls_insecure_skip_verify
+		}
+		# UniFi OS validates the WebSocket Origin against its own host. Rewrite
+		# Host *and* Origin/Referer to the upstream so the realtime dashboard WS
+		# (/api/ws/system, /wss/*) reads as same-origin; otherwise UniFi rejects
+		# the upgrade and the live panels fail while the rest of the UI loads.
+		header_up Host {upstream_hostport}
+		header_up Origin https://{upstream_hostport}
+		header_up Referer https://{upstream_hostport}/
+	}
+}
+
+# --- Beszel monitoring dashboard -> https://monitor.chicago.sing.sh ---
+# Hub serves plain HTTP on :8090 inside the container (joined to `proxy`).
+# reverse_proxy upgrades the dashboard's WebSocket/SSE automatically.
+monitor.chicago.sing.sh {
+	import tls_cloudflare
+	reverse_proxy beszel:8090
+}
+
+# --- Internal wildcard: every *.chicago.sing.sh name terminates here ---
+# Real service routes get added as this fills in (handle/reverse_proxy
+# blocks per subdomain). For now it just proves the stack is live.
+*.chicago.sing.sh {
+	import tls_cloudflare
+	respond "SingNet Caddy is up — host={host}"
+}
+
+# --- zscraper gallery (Option B: served at the root of zs.sing.sh) ---
+# Backend is prefix-unaware: it serves /api, /images, static assets, and the
+# SPA fallback at root. zscraper joins the shared `proxy` network so Caddy
+# reaches it by name. Until the gallery data is synced, the backend will be
+# down and this vhost will return 502 — the cert still issues via DNS-01.
+zs.sing.sh {
+	import tls_cloudflare
+	encode zstd gzip
+
+	# Serve gallery media (images + videos) straight from disk, bypassing Node so
+	# large static I/O never competes with the API — restores the optimization
+	# from zscraper's original bundled Caddy. Data is bind-mounted read-only at
+	# /media/zscraper (see compose). `encode` leaves these alone — already-
+	# compressed JPEG/MP4 are not recompressed (verified) — and file_server
+	# serves byte ranges for video seeking. Unmatched /images paths 404 here
+	# rather than falling through to Node (all /images/* are real disk files).
+	handle_path /images/* {
+		root * /media/zscraper
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	reverse_proxy zscraper:3001
+}
