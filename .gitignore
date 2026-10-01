@@ -1,5 +1,6 @@
-# Separate repo with its own remote — not tracked here
+# Separate repos with their own remotes — not tracked here
 zscraper/
+cbchecker/
 
 # Secrets (backed up via restic, never committed). .env.example files ARE tracked.
 .env

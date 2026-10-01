@@ -91,6 +91,8 @@ internal names, keep `tls_internal` (and distribute Caddy's root CA) instead.
     `*.chicago.sing.sh`), HTTP→HTTPS redirect + HTTP/3.
   - `https://zs.sing.sh` → trusted cert; currently `502` until the zscraper
     backend is up (gallery data not yet synced — see `/opt/stacks/zscraper`).
+  - `https://cb.sing.sh` → CB Checker (`cbchecker:3001`, `/opt/stacks/cbchecker`).
+    Needs the `cb.sing.sh` override zone in Technitium (same as `zs.sing.sh`).
   - `https://dns.chicago.sing.sh` → Technitium web console (HTTP `technitium:5380`
     upstream over the `proxy` network). **Live.** Raw DNS on :53 is untouched.
   - `https://gateway.chicago.sing.sh` → UniFi UCG-Ultra UI (`https://10.0.1.1`,

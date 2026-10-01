@@ -105,3 +105,13 @@ zs.sing.sh {
 
 	reverse_proxy zscraper:3001
 }
+
+# --- CB Checker -> https://cb.sing.sh ---
+# Prefix-unaware Express app (API + SPA at root) on the shared `proxy` network.
+# Needs a Technitium per-FQDN override zone `cb.sing.sh` (A @ -> 10.0.1.6),
+# same pattern as zs.sing.sh. Cert issues via DNS-01 regardless.
+cb.sing.sh {
+	import tls_cloudflare
+	encode zstd gzip
+	reverse_proxy cbchecker:3001
+}
