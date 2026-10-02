@@ -89,8 +89,8 @@ internal names, keep `tls_internal` (and distribute Caddy's root CA) instead.
   then production. Both sites use `import tls_cloudflare`; certs auto-renew.
   - `https://*.chicago.sing.sh` → 200, trusted wildcard cert (SAN
     `*.chicago.sing.sh`), HTTP→HTTPS redirect + HTTP/3.
-  - `https://zs.sing.sh` → trusted cert; currently `502` until the zscraper
-    backend is up (gallery data not yet synced — see `/opt/stacks/zscraper`).
+  - `https://zs.sing.sh` → zscraper gallery (`zscraper:3001`, `/opt/stacks/zscraper`);
+    `/images/*` served straight from its data dir.
   - `https://cb.sing.sh` → CB Checker (`cbchecker:3001`, `/opt/stacks/cbchecker`).
     Needs the `cb.sing.sh` override zone in Technitium (same as `zs.sing.sh`).
   - `https://dns.chicago.sing.sh` → Technitium web console (HTTP `technitium:5380`

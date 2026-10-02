@@ -84,8 +84,8 @@ monitor.chicago.sing.sh {
 # --- zscraper gallery (Option B: served at the root of zs.sing.sh) ---
 # Backend is prefix-unaware: it serves /api, /images, static assets, and the
 # SPA fallback at root. zscraper joins the shared `proxy` network so Caddy
-# reaches it by name. Until the gallery data is synced, the backend will be
-# down and this vhost will return 502 — the cert still issues via DNS-01.
+# reaches it by name. If the backend is down this vhost returns 502; the cert
+# still issues via DNS-01 regardless.
 zs.sing.sh {
 	import tls_cloudflare
 	encode zstd gzip
