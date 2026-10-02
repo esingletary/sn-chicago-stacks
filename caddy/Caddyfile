@@ -103,6 +103,13 @@ zs.sing.sh {
 		file_server
 	}
 
+	# Add-albums API -> the worker (the only zscraper service that writes data).
+	# Path kept intact; the worker serves under /api/add. Its /events stream is
+	# server-sent events, which reverse_proxy flushes immediately.
+	handle /api/add/* {
+		reverse_proxy zscraper-worker:3002
+	}
+
 	reverse_proxy zscraper:3001
 }
 
