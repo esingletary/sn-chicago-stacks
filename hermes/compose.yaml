@@ -1,0 +1,42 @@
+x-hermes: &hermes
+  build: .
+  image: hermes-claude:local
+  restart: unless-stopped
+  # Keep the image's ENTRYPOINT: s6-overlay's /init is PID 1 and supervises
+  # the gateway. `gateway run` is the upstream CMD for
+  # unattended chat-platform mode.
+  command: ["gateway", "run"]
+  # Files on the bind mount stay owned by `es`, same as the rest of /opt/stacks.
+  environment:
+    HERMES_UID: "1000"
+    HERMES_GID: "1000"
+    # Claude Code CLI login lives on the data volume, so it survives image
+    # upgrades and is per-agent (each container can use its own account).
+    CLAUDE_CONFIG_DIR: /opt/data/claude
+    CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIR: /opt/data/claude
+    DISABLE_AUTOUPDATER: "1"
+  # Inference happens at Anthropic; the limit mostly bounds Claude CLI
+  # subprocesses and tool runs so a runaway agent can't starve Technitium
+  # (the LAN's DNS) or the other stacks. No local browser — use a cloud one.
+  mem_limit: 2g
+  cpus: 1.5
+  # No `proxy` network and no ports: Telegram/Slack/etc. are outbound
+  # connections. The web dashboard is off — it holds API keys and refuses a
+  # non-loopback bind without auth (see README to enable it).
+
+services:
+  # --- Stockroom Projects chief of staff ---
+  hermes-srp:
+    <<: *hermes
+    container_name: hermes-srp
+    volumes:
+      - ./data/srp:/opt/data
+
+  # --- Vibrant Chicago chief of staff ---
+  # Separate container + data dir: memory, sessions, credentials and resource
+  # limits never mix with SRP. Never point two containers at one data dir.
+  hermes-vc:
+    <<: *hermes
+    container_name: hermes-vc
+    volumes:
+      - ./data/vc:/opt/data

@@ -13,6 +13,7 @@ caddy/config/
 technitium/data/
 beszel/beszel_data/
 beszel/beszel_agent_data/
+hermes/data/
 
 # OS cruft
 .DS_Store
