@@ -20,9 +20,9 @@ plugin, which runs each turn through the `claude` CLI on a Claude Pro/Max
 subscription (no API key). The image is upstream `nousresearch/hermes-agent`
 plus a pinned `@anthropic-ai/claude-code` (see `Dockerfile`).
 
-- Model: `claude-sonnet-5` (`model.default` in `data/<agent>/config.yaml`).
-  Sonnet 5.5 isn't in the plugin's model catalog yet (v0.3.0); switch
-  with `hermes config set model.default <id>` once it is.
+- Model (`model.default` in `data/<agent>/config.yaml`): `hermes-srp` is on
+  `claude-sonnet-5-5`, `hermes-vc` still on `claude-sonnet-5`. Switch with
+  `docker exec -u hermes hermes-vc hermes config set model.default claude-sonnet-5-5`.
 - CLI login lives in `data/<agent>/claude/` (`CLAUDE_CONFIG_DIR`), so each
   agent can be logged into a different Claude account. If both use the same
   account, they share its usage limits.
@@ -45,8 +45,28 @@ docker exec -it hermes-srp hermes chat -q "Say hi"
 ```
 
 Repeat with `hermes-vc`. Already done for both: plugin installed + enabled,
-`model.provider: claude-subscription-directsdk-experimental`,
-`model.default: claude-sonnet-5`.
+`model.provider: claude-subscription-directsdk-experimental` (model: see above).
+
+## Google Workspace (hermes-srp)
+
+Iris is authed as `iris@stockroomprojects.com` via the bundled
+`google-workspace` skill (OAuth Desktop client in an Internal GCP project).
+
+- Credentials: `data/srp/google_client_secret.json` + `google_token.json` (0600).
+- Access is limited outside Hermes: iris sits in the Workspace **Agents** OU
+  (no external Drive sharing, Gmail delivery restricted to the domain) and
+  the GCP project only enables Drive/Docs/Sheets/Slides. The token holds all
+  8 skill scopes; disabled APIs return 403. Enable the Gmail API to let it
+  read mail forwarded to iris@.
+- Run the skill with the Hermes venv Python. The agent's terminal PATH lacks
+  it, so bare `python` is the system one (no Google libs, no pip):
+  ```sh
+  docker exec -u hermes hermes-srp /opt/hermes/.venv/bin/python \
+    /opt/data/skills/productivity/google-workspace/scripts/setup.py --check
+  ```
+  `--check-live` always fails: it calls the Calendar API, which is disabled.
+- Files go in iris's "Iris Notes" folder, shared with manny@. The skill
+  can't use shared drives (no `supportsAllDrives`).
 
 ## Operations
 
@@ -71,6 +91,9 @@ stateless.
   Technitium (LAN DNS). No local browser: use a cloud browser
   (`BROWSER_USE_API_KEY` or `BROWSERBASE_*` in `data/<agent>/.env`), with
   a separate key per business.
+- **PDFs:** `read_file` rejects scanned pages (no hosted OCR key, by
+  choice: Firecrawl would get the whole document). The image ships
+  `pdftotext`/`pdftoppm` + `tesseract` (eng) so the agent OCRs locally.
 - **Backups:** `data/` is covered by the nightly restic run of `/opt/stacks`
   (includes `.env` secrets and the Claude login). `state.db` is SQLite in WAL
   mode; for a guaranteed-consistent snapshot, stop the containers around the
